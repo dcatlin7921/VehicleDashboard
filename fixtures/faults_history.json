@@ -1,0 +1,4 @@
+[
+    { "code": "P0420", "description": "Catalyst System Efficiency Below Threshold", "last_seen_utc": "2024-09-15T10:00:00Z" },
+    { "code": "U0100", "description": "Lost Communication With ECM/PCM A", "last_seen_utc": "2024-08-20T14:30:00Z" }
+]

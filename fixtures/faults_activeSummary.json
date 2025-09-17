@@ -1,0 +1,93 @@
+[
+  {
+    "device_id": "b12",
+    "device_name": "62112 - 23 White Dodge Charger",
+    "active_faults": 32,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T00:06:31.000Z"
+  },
+  {
+    "device_id": "bF",
+    "device_name": "62111 - 23 White Dodge Charger",
+    "active_faults": 10,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-17T12:48:53.783Z"
+  },
+  {
+    "device_id": "bD",
+    "device_name": "62113 - 23 White Dodge Charger",
+    "active_faults": 64,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-17T12:38:41.963Z"
+  },
+  {
+    "device_id": "b10",
+    "device_name": "55287 - 18 Blue F150 Pickup Truck",
+    "active_faults": 47,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T21:08:05.000Z"
+  },
+  {
+    "device_id": "b95",
+    "device_name": "62791 - 23 Black Ford Explorer Hybrid Interceptor",
+    "active_faults": 5,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-16T20:27:42.000Z"
+  },
+  {
+    "device_id": "bA",
+    "device_name": "62114 - 23 White Dodge Charger",
+    "active_faults": 12,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T22:08:55.000Z"
+  },
+  {
+    "device_id": "b13",
+    "device_name": "56916 - 19 Grey Ford Taurus",
+    "active_faults": 5,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-10T16:58:40.000Z"
+  },
+  {
+    "device_id": "b84",
+    "device_name": "61886 - 23 Black Ford Hybrid Interceptor",
+    "active_faults": 2,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-16T21:42:47.000Z"
+  },
+  {
+    "device_id": "b11",
+    "device_name": "56917 - 19 Grey Ford Taurus",
+    "active_faults": 3,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T10:21:17.000Z"
+  },
+  {
+    "device_id": "b9",
+    "device_name": "63255 - 23 White Dodge Charger",
+    "active_faults": 5,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-10T00:39:38.000Z"
+  },
+  {
+    "device_id": "b8F",
+    "device_name": "61538 - 23 Black Ford FFV Interceptor",
+    "active_faults": 1,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-16T16:20:02.000Z"
+  },
+  {
+    "device_id": "bC",
+    "device_name": "62110 - 23 White Dodge Charger",
+    "active_faults": 9,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T13:26:17.000Z"
+  },
+  {
+    "device_id": "bB",
+    "device_name": "62109 - 23 White Dodge Charger",
+    "active_faults": 7,
+    "high_sev": 0,
+    "last_fault_utc": "2025-09-09T13:28:59.000Z"
+  }
+]

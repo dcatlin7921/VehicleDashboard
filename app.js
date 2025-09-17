@@ -31,14 +31,22 @@ class FleetDashboard {
 
     async loadConfig() {
         try {
-            const response = await fetch('/config.json');
+            let response = await fetch('config.json');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             this.config = await response.json();
-            this.apiBase = this.config.API_BASE || '';
-        } catch (error) {
-            console.warn('Could not load config.json, using defaults');
-            this.config = {};
-            this.apiBase = '';
+        } catch (primaryError) {
+            console.warn('config.json load failed, trying config.json.sample', primaryError);
+            try {
+                const response2 = await fetch('config.json.sample');
+                if (!response2.ok) throw new Error(`HTTP ${response2.status}`);
+                this.config = await response2.json();
+            } catch (error) {
+                console.warn('Could not load config.json.sample, using defaults', error);
+                this.config = {};
+            }
         }
+        this.apiBase = this.config.API_BASE || '';
+        this.mock = !!this.config.MOCK;
     }
 
     setupEventListeners() {
@@ -126,12 +134,32 @@ class FleetDashboard {
     }
 
     async apiCall(endpoint) {
+        if (this.mock) return this.fetchFixture(endpoint);
         const url = this.apiBase + endpoint;
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return await response.json();
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+    }
+
+    async fetchFixture(endpoint) {
+        const map = {
+            '/api/info': 'info.json',
+            '/api/kpis': 'kpis.json',
+            '/api/assets': 'assets.json',
+            '/api/maintenance/due': 'maintenance_due.json',
+            '/api/faults/activeSummary': 'faults_activeSummary.json',
+            '/api/miles/monthly': 'miles_monthly.json',
+            '/api/admin/config': 'admin_config.json',
+            '/api/refresh-now': 'info.json',
+            '/api/miles/asset/': 'miles_asset.json',
+            '/api/faults/history/': 'faults_history.json',
+            '/api/maintenance/asset/': 'maintenance_asset.json'
+        };
+        const key = Object.keys(map).find(k => endpoint.startsWith(k));
+        const file = map[key];
+        const r = await fetch(`/fixtures/${file}`);
+        if (!r.ok) throw new Error(`Fixture ${file} missing`);
+        return r.json();
     }
 
     renderDashboard() {
@@ -224,17 +252,10 @@ class FleetDashboard {
         const ctx = document.getElementById('dailyMilesChart');
         if (!ctx) return;
 
-        // Mock data for 60 days - replace with actual API call
-        const labels = [];
-        const data = [];
-        const today = new Date();
-        
-        for (let i = 59; i >= 0; i--) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-            labels.push(date.toLocaleDateString());
-            data.push(Math.floor(Math.random() * 500) + 100);
-        }
+        const dailyMiles = this.data.kpis.daily_miles_60d || [];
+        const labels = dailyMiles.map(d => new Date(d.date).toLocaleDateString());
+        const data = dailyMiles.map(d => d.miles);
+
 
         if (this.charts.dailyMiles) {
             this.charts.dailyMiles.destroy();
@@ -274,18 +295,16 @@ class FleetDashboard {
         const container = document.getElementById('topMoversList');
         if (!container) return;
 
-        // Mock top 5 movers
-        const movers = [
-            { name: 'Vehicle-001', miles: 2847 },
-            { name: 'Vehicle-015', miles: 2651 },
-            { name: 'Vehicle-007', miles: 2432 },
-            { name: 'Vehicle-023', miles: 2219 },
-            { name: 'Vehicle-012', miles: 1987 }
-        ];
+        const movers = this.data.kpis.top_movers_mtd || [];
+
+        if (movers.length === 0) {
+            container.innerHTML = '<p>No mileage data for the current period.</p>';
+            return;
+        }
 
         container.innerHTML = movers.map(mover => `
             <div class="mover-item">
-                <strong>${mover.name}</strong>
+                <strong>${mover.asset_name}</strong>
                 <span>${this.formatNumber(mover.miles)} mi</span>
             </div>
         `).join('');
@@ -295,10 +314,12 @@ class FleetDashboard {
         const container = document.getElementById('complianceItems');
         if (!container) return;
 
+        const compliance = this.data.kpis.compliance || {};
+
         const items = [
-            { label: 'Overdue maintenance', value: this.data.kpis.maint_overdue || 0, status: 'overdue' },
-            { label: 'Missing start/end snapshots', value: 0, status: 'ok' },
-            { label: 'Device swaps since FY start', value: 2, status: 'warning' }
+            { label: 'Overdue maintenance', value: this.data.kpis.maint_overdue || 0, status: (this.data.kpis.maint_overdue > 0) ? 'overdue' : 'ok' },
+            { label: 'Missing start/end snapshots', value: compliance.missing_snapshots || 0, status: (compliance.missing_snapshots > 0) ? 'warning' : 'ok' },
+            { label: 'Device swaps since FY start', value: compliance.device_swaps_fy || 0, status: (compliance.device_swaps_fy > 5) ? 'warning' : 'ok' }
         ];
 
         container.innerHTML = items.map(item => `
@@ -319,9 +340,9 @@ class FleetDashboard {
         const ctx = document.getElementById('monthlyMilesChart');
         if (!ctx) return;
 
-        // Mock data
-        const labels = ['V001', 'V002', 'V003', 'V004', 'V005', 'V006', 'V007', 'V008', 'V009', 'V010'];
-        const data = labels.map(() => Math.floor(Math.random() * 2000) + 500);
+        const monthlyMiles = this.data.miles.filter(m => m.month === '2024-07'); // Example month, will be dynamic
+        const labels = monthlyMiles.map(m => m.asset_name);
+        const data = monthlyMiles.map(m => m.miles);
 
         if (this.charts.monthlyMiles) {
             this.charts.monthlyMiles.destroy();
@@ -353,8 +374,9 @@ class FleetDashboard {
         const ctx = document.getElementById('fleetMilesTrendChart');
         if (!ctx) return;
 
-        const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const data = labels.map(() => Math.floor(Math.random() * 25000) + 15000);
+        const trend = this.data.kpis.monthly_fleet_miles_12m || [];
+        const labels = trend.map(m => m.month);
+        const data = trend.map(m => m.miles);
 
         if (this.charts.fleetMilesTrend) {
             this.charts.fleetMilesTrend.destroy();
@@ -389,18 +411,19 @@ class FleetDashboard {
         const tbody = document.querySelector('#milesTable tbody');
         if (!tbody) return;
 
-        const data = [
-            { device: 'Vehicle-001', month: '2024-09', start: 45231, end: 47878, miles: 2647, quality: 'good' },
-            { device: 'Vehicle-002', month: '2024-09', start: 38921, end: 41234, miles: 2313, quality: 'good' },
-            { device: 'Vehicle-003', month: '2024-09', start: 52341, end: 54876, miles: 2535, quality: 'warning' }
-        ];
+        const data = this.data.miles || [];
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">No mileage data available.</td></tr>';
+            return;
+        }
 
         tbody.innerHTML = data.map(row => `
             <tr>
-                <td>${row.device}</td>
+                <td>${row.asset_name}</td>
                 <td>${row.month}</td>
-                <td>${this.formatNumber(row.start)}</td>
-                <td>${this.formatNumber(row.end)}</td>
+                <td>${this.formatNumber(row.start_odo)}</td>
+                <td>${this.formatNumber(row.end_odo)}</td>
                 <td>${this.formatNumber(row.miles)}</td>
                 <td><span class="dq-${row.quality}">${row.quality}</span></td>
             </tr>
@@ -426,20 +449,21 @@ class FleetDashboard {
         const tbody = document.querySelector('#maintenanceTable tbody');
         if (!tbody) return;
 
-        const data = [
-            { device: 'Vehicle-001', service: 'Oil Change', lastDate: '2024-08-15', lastOdo: 45000, milesToDue: 500, daysToDue: 15, status: 'DUE_SOON' },
-            { device: 'Vehicle-002', service: 'Tire Rotation', lastDate: '2024-07-01', lastOdo: 38000, milesToDue: -200, daysToDue: -5, status: 'OVERDUE' },
-            { device: 'Vehicle-003', service: 'Brake Inspection', lastDate: '2024-09-01', lastOdo: 52000, milesToDue: 8000, daysToDue: 180, status: 'UPCOMING' }
-        ];
+        const data = this.data.maintenance || [];
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7">No maintenance data available.</td></tr>';
+            return;
+        }
 
         tbody.innerHTML = data.map(row => `
             <tr>
-                <td>${row.device}</td>
-                <td>${row.service}</td>
-                <td>${row.lastDate}</td>
-                <td>${this.formatNumber(row.lastOdo)}</td>
-                <td>${this.formatNumber(row.milesToDue)}</td>
-                <td>${row.daysToDue}</td>
+                <td>${row.asset_name}</td>
+                <td>${row.service_type}</td>
+                <td>${row.last_service_date}</td>
+                <td>${this.formatNumber(row.last_service_odo)}</td>
+                <td>${this.formatNumber(row.miles_to_due)}</td>
+                <td>${row.days_to_due}</td>
                 <td><span class="status-badge status-${row.status.toLowerCase()}">${row.status}</span></td>
             </tr>
         `).join('');
@@ -454,20 +478,21 @@ class FleetDashboard {
         const tbody = document.querySelector('#faultsTable tbody');
         if (!tbody) return;
 
-        const data = [
-            { device: 'Vehicle-001', code: 'P0420', desc: 'Catalyst System Efficiency Below Threshold', severity: 'HIGH', lastSeen: '2024-09-15', active: true },
-            { device: 'Vehicle-002', code: 'P0171', desc: 'System Too Lean', severity: 'MEDIUM', lastSeen: '2024-09-14', active: true },
-            { device: 'Vehicle-003', code: 'P0300', desc: 'Random/Multiple Cylinder Misfire', severity: 'HIGH', lastSeen: '2024-09-13', active: false }
-        ];
+        const data = this.data.faults || [];
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6">No active faults.</td></tr>';
+            return;
+        }
 
         tbody.innerHTML = data.map(row => `
             <tr>
-                <td>${row.device}</td>
+                <td>${row.asset_name}</td>
                 <td>${row.code}</td>
-                <td>${row.desc}</td>
+                <td>${row.description}</td>
                 <td><span class="severity-${row.severity.toLowerCase()}">${row.severity}</span></td>
-                <td>${row.lastSeen}</td>
-                <td>${row.active ? 'Yes' : 'No'}</td>
+                <td>${new Date(row.last_seen_utc).toLocaleString()}</td>
+                <td>${row.is_active ? 'Yes' : 'No'}</td>
             </tr>
         `).join('');
     }
@@ -481,7 +506,13 @@ class FleetDashboard {
         const ctx = document.getElementById('faultsSeverityChart');
         if (!ctx) return;
 
-        const data = { HIGH: 3, MEDIUM: 8, LOW: 15 };
+        const summary = this.data.faults.reduce((acc, fault) => {
+            acc[fault.severity] = (acc[fault.severity] || 0) + 1;
+            return acc;
+        }, {});
+
+        const labels = Object.keys(summary);
+        const data = Object.values(summary);
 
         if (this.charts.faultsSeverity) {
             this.charts.faultsSeverity.destroy();
@@ -490,10 +521,10 @@ class FleetDashboard {
         this.charts.faultsSeverity = new Chart(ctx, {
             type: 'doughnut',
             data: {
-                labels: Object.keys(data),
+                labels: labels,
                 datasets: [{
-                    data: Object.values(data),
-                    backgroundColor: ['#e74c3c', '#f39c12', '#95a5a6']
+                    data: data,
+                    backgroundColor: ['#e74c3c', '#f39c12', '#95a5a6'] // Adjust colors as needed
                 }]
             },
             options: {
@@ -512,13 +543,9 @@ class FleetDashboard {
         const ctx = document.getElementById('topFaultsChart');
         if (!ctx) return;
 
-        const data = [
-            { code: 'P0420', count: 5 },
-            { code: 'P0171', count: 3 },
-            { code: 'P0300', count: 2 },
-            { code: 'P0442', count: 2 },
-            { code: 'P0128', count: 1 }
-        ];
+        const topFaults = this.data.kpis.top_recurring_faults || [];
+        const labels = topFaults.map(f => f.code);
+        const data = topFaults.map(f => f.count);
 
         if (this.charts.topFaults) {
             this.charts.topFaults.destroy();
@@ -527,10 +554,10 @@ class FleetDashboard {
         this.charts.topFaults = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: data.map(d => d.code),
+                labels: labels,
                 datasets: [{
                     label: 'Occurrences',
-                    data: data.map(d => d.count),
+                    data: data,
                     backgroundColor: '#3498db'
                 }]
             },
@@ -550,44 +577,54 @@ class FleetDashboard {
         const container = document.getElementById('assetsContainer');
         if (!container) return;
 
-        const assets = [
-            { id: 1, name: 'Vehicle-001', vin: '1HGBH41JXMN109186', odo: 47878, miles7d: 347, faults: 1, maint: 'OK' },
-            { id: 2, name: 'Vehicle-002', vin: '1FTFW1ET5DFC10312', odo: 41234, miles7d: 289, faults: 0, maint: 'DUE_SOON' },
-            { id: 3, name: 'Vehicle-003', vin: '3ALACWDC2DDSC0623', odo: 54876, miles7d: 412, faults: 2, maint: 'OVERDUE' }
-        ];
+        const assets = this.data.assets || [];
+
+        if (assets.length === 0) {
+            container.innerHTML = '<p>No assets found.</p>';
+            return;
+        }
 
         container.innerHTML = assets.map(asset => `
-            <div class="asset-card" onclick="dashboard.showAssetDetails(${asset.id})">
+            <div class="asset-card" onclick="dashboard.showAssetDetails('${asset.id}')">
                 <h4>${asset.name}</h4>
                 <div class="asset-info">
                     <span>VIN: ${asset.vin}</span>
-                    <span>Odometer: ${this.formatNumber(asset.odo)} mi</span>
-                    <span>7-day miles: ${this.formatNumber(asset.miles7d)} mi</span>
-                    <span>Active faults: ${asset.faults}</span>
-                    <span>Maintenance: <span class="status-badge status-${asset.maint.toLowerCase()}">${asset.maint}</span></span>
+                    <span>Odometer: ${this.formatNumber(asset.last_known_odo)} mi</span>
+                    <span>7-day miles: ${this.formatNumber(asset.miles_7d)} mi</span>
+                    <span>Active faults: ${asset.active_faults}</span>
+                    <span>Maintenance: <span class="status-badge status-${asset.maint_status.toLowerCase()}">${asset.maint_status}</span></span>
                 </div>
             </div>
         `).join('');
     }
 
-    showAssetDetails(assetId) {
+    async showAssetDetails(assetId) {
         const modal = document.getElementById('assetModal');
         const title = document.getElementById('assetModalTitle');
         const content = document.getElementById('assetModalContent');
 
-        const asset = { id: assetId, name: `Vehicle-${String(assetId).padStart(3, '0')}` };
-        
+        const asset = this.data.assets.find(a => a.id === assetId);
+        if (!asset) return;
+
         title.textContent = `${asset.name} Details`;
+        content.innerHTML = `Loading details...`;
+        modal.style.display = 'block';
+
+        // In a real app, you'd fetch this data. We'll simulate it for now.
+        const [miles, faults, services] = await Promise.all([
+            this.apiCall(`/api/miles/asset/${assetId}?months=12`),
+            this.apiCall(`/api/faults/history/${assetId}`),
+            this.apiCall(`/api/maintenance/asset/${assetId}`)
+        ]);
+
         content.innerHTML = `
             <h3>12-Month Miles Chart</h3>
             <canvas id="assetMilesChart" width="400" height="200"></canvas>
             <h3>Fault History</h3>
-            <p>No recent faults</p>
+            ${this.renderAssetFaults(faults)}
             <h3>Upcoming Services</h3>
-            <p>Oil change due in 500 miles</p>
+            ${this.renderAssetServices(services)}
         `;
-
-        modal.style.display = 'block';
 
         // Render mini chart
         setTimeout(() => {
@@ -596,10 +633,10 @@ class FleetDashboard {
                 new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                        labels: miles.map(m => m.month),
                         datasets: [{
                             label: 'Monthly Miles',
-                            data: Array(12).fill(0).map(() => Math.floor(Math.random() * 2000) + 1000),
+                            data: miles.map(m => m.miles),
                             borderColor: '#3498db',
                             backgroundColor: 'rgba(52, 152, 219, 0.1)',
                             tension: 0.4,
@@ -617,6 +654,28 @@ class FleetDashboard {
 
     renderAdmin() {
         // Admin form is populated in loadAdminConfig
+    }
+
+    renderAssetFaults(faults) {
+        if (!faults || faults.length === 0) {
+            return '<p>No fault history available.</p>';
+        }
+        return `
+            <ul>
+                ${faults.map(f => `<li>${f.code}: ${f.description} (${new Date(f.last_seen_utc).toLocaleDateString()})</li>`).join('')}
+            </ul>
+        `;
+    }
+
+    renderAssetServices(services) {
+        if (!services || services.length === 0) {
+            return '<p>No upcoming services.</p>';
+        }
+        return `
+            <ul>
+                ${services.map(s => `<li>${s.service_type} - Due in ${s.miles_to_due} miles or ${s.days_to_due} days</li>`).join('')}
+            </ul>
+        `;
     }
 
     populateAdminForm(config) {
@@ -704,6 +763,9 @@ class FleetDashboard {
     }
 
     formatNumber(num, decimals = 0) {
+        if (num === null || num === undefined) {
+            return 'N/A';
+        }
         return num.toLocaleString(undefined, {
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals

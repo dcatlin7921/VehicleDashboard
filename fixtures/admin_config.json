@@ -1,0 +1,7 @@
+{
+  "fy_start_month": "7",
+  "due_soon_miles": "500",
+  "due_soon_days": "15",
+  "utilization_threshold": "1",
+  "odometer_precedence": "J1939,OBD,Calc"
+}

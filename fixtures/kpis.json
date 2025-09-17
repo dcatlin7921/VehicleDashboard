@@ -1,0 +1,12 @@
+{
+  "mtd_miles": 0,
+  "ytd_miles": 8078,
+  "fytd_miles": 8078,
+  "active_assets_7d": 1,
+  "utilization_pct_7d": 4.5,
+  "avg_mi_asset_day_7d": 52.5,
+  "faults_active_vehicle": 202,
+  "faults_active_telematics": 0,
+  "maint_overdue": 0,
+  "maint_due_soon": 0
+}

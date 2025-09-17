@@ -203,6 +203,8 @@ body {
     padding: 20px;
     border-radius: 8px;
     border: 1px solid #e9ecef;
+    position: relative;
+    overflow: hidden;
 }
 
 .chart-container h3 {
@@ -210,6 +212,14 @@ body {
     color: #2c3e50;
     font-size: 16px;
     font-weight: 600;
+}
+
+/* Ensure charts have a bounded height so Chart.js doesn't trigger infinite resize loops */
+.chart-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 320px !important; /* unified chart height across tabs */
+    max-height: 60vh; /* guard against small screens */
 }
 
 .top-movers,
