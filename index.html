@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Snapshot Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Fleet Snapshot Dashboard</h1>
+            <div class="data-freshness">
+                <span id="lastUpdate">Loading...</span>
+                <button id="refreshBtn" class="btn-refresh" title="Live preview (no DB write)">
+                    🔄 Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Sticky Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <label>Agency/Pool:</label>
+                <select id="filterAgency">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Class:</label>
+                <select id="filterClass">
+                    <option value="">All</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="filterStatus">
+                    <option value="">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Search:</label>
+                <input type="text" id="filterSearch" placeholder="VIN or Name" />
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="miles">Miles</button>
+            <button class="tab-btn" data-tab="maintenance">Maintenance</button>
+            <button class="tab-btn" data-tab="faults">Faults</button>
+            <button class="tab-btn" data-tab="assets">Assets</button>
+            <button class="tab-btn" data-tab="admin">Admin</button>
+        </nav>
+
+        <!-- KPI Bar -->
+        <div class="kpi-bar" id="kpiBar">
+            <div class="kpi-item">
+                <div class="kpi-value" id="fleetSize">-</div>
+                <div class="kpi-label">Fleet Size</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="mtdMiles">-</div>
+                <div class="kpi-label">MTD Miles</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="ytdMiles">-</div>
+                <div class="kpi-label">YTD Miles</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="fytdMiles">-</div>
+                <div class="kpi-label">FYTD Miles</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="activeAssets7d">-</div>
+                <div class="kpi-label">Active (7d)</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="utilizationPct7d">-</div>
+                <div class="kpi-label">Utilization % (7d)</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="avgMiAssetDay7d">-</div>
+                <div class="kpi-label">Avg mi/day</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value overdue" id="maintOverdue">-</div>
+                <div class="kpi-label">Overdue Maint</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="maintDueSoon">-</div>
+                <div class="kpi-label">Due Soon</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="faultsVehicle">-</div>
+                <div class="kpi-label">Vehicle Faults</div>
+            </div>
+            <div class="kpi-item">
+                <div class="kpi-value" id="faultsTelematics">-</div>
+                <div class="kpi-label">Telematics Faults</div>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <main class="tab-content">
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-panel active">
+                <div class="overview-grid">
+                    <div class="chart-container">
+                        <h3>Daily Fleet Miles (Last 60 Days)</h3>
+                        <canvas id="dailyMilesChart"></canvas>
+                    </div>
+                    <div class="top-movers">
+                        <h3>Top 5 Movers (MTD)</h3>
+                        <div id="topMoversList"></div>
+                    </div>
+                    <div class="compliance-strip">
+                        <h3>Compliance</h3>
+                        <div id="complianceItems"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Miles Tab -->
+            <div id="miles" class="tab-panel">
+                <div class="miles-controls">
+                    <button class="toggle-btn active" data-period="CY">CY</button>
+                    <button class="toggle-btn" data-period="FY">FY</button>
+                    <select id="milesMonthSelect">
+                        <option value="">Current Month</option>
+                    </select>
+                </div>
+                <div class="miles-grid">
+                    <div class="chart-container">
+                        <h3>Miles by Vehicle (Selected Month)</h3>
+                        <canvas id="monthlyMilesChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Monthly Fleet Miles (Last 12)</h3>
+                        <canvas id="fleetMilesTrendChart"></canvas>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="milesTable">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Month</th>
+                                <th>Start Odo</th>
+                                <th>End Odo</th>
+                                <th>Miles</th>
+                                <th>Quality</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Maintenance Tab -->
+            <div id="maintenance" class="tab-panel">
+                <div class="maintenance-kpis">
+                    <div class="kpi-tile overdue">
+                        <div class="kpi-value" id="maintOverdueTile">-</div>
+                        <div class="kpi-label">Overdue</div>
+                    </div>
+                    <div class="kpi-tile due-soon">
+                        <div class="kpi-value" id="maintDueSoonTile">-</div>
+                        <div class="kpi-label">Due Soon</div>
+                    </div>
+                    <div class="kpi-tile upcoming">
+                        <div class="kpi-value" id="maintUpcomingTile">-</div>
+                        <div class="kpi-label">Upcoming (30d)</div>
+                    </div>
+                </div>
+                <div class="maintenance-view">
+                    <h3>Next 60 Days by Service Type</h3>
+                    <div id="maintenanceGantt"></div>
+                </div>
+                <div class="table-container">
+                    <table id="maintenanceTable">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Service Type</th>
+                                <th>Last Service Date</th>
+                                <th>Last Service Odo</th>
+                                <th>Miles to Due</th>
+                                <th>Days to Due</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Faults Tab -->
+            <div id="faults" class="tab-panel">
+                <div class="faults-controls">
+                    <button class="toggle-btn active" data-source="vehicle">Vehicle ECU</button>
+                    <button class="toggle-btn" data-source="telematics">Telematics Device</button>
+                </div>
+                <div class="faults-kpis">
+                    <div class="kpi-item">
+                        <div class="kpi-value" id="activeFaults">-</div>
+                        <div class="kpi-label">Active Faults</div>
+                    </div>
+                    <div class="kpi-item">
+                        <div class="kpi-value" id="newFaults24h">-</div>
+                        <div class="kpi-label">New (24h)</div>
+                    </div>
+                </div>
+                <div class="faults-grid">
+                    <div class="chart-container">
+                        <h3>Faults by Severity</h3>
+                        <canvas id="faultsSeverityChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Top Recurring Codes</h3>
+                        <canvas id="topFaultsChart"></canvas>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="faultsTable">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Code</th>
+                                <th>Description</th>
+                                <th>Severity</th>
+                                <th>Last Seen</th>
+                                <th>Active</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Assets Tab -->
+            <div id="assets" class="tab-panel">
+                <div class="assets-view-toggle">
+                    <button class="toggle-btn active" data-view="cards">Cards</button>
+                    <button class="toggle-btn" data-view="list">List</button>
+                </div>
+                <div id="assetsContainer" class="assets-grid"></div>
+            </div>
+
+            <!-- Admin Tab -->
+            <div id="admin" class="tab-panel">
+                <div class="admin-grid">
+                    <div class="admin-section">
+                        <h3>Organization Settings (DB)</h3>
+                        <form id="adminForm">
+                            <div class="form-group">
+                                <label>FY Start Month:</label>
+                                <select id="fyStartMonth">
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7" selected>July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Due Soon Miles:</label>
+                                <input type="number" id="dueSoonMiles" value="500" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Due Soon Days:</label>
+                                <input type="number" id="dueSoonDays" value="15" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Utilization Threshold (mi/day):</label>
+                                <input type="number" id="utilizationThreshold" value="1" min="0" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label>Odometer Precedence (comma-separated diag IDs):</label>
+                                <input type="text" id="odometerPrecedence" placeholder="Engine,Transmission,ABS">
+                            </div>
+                            <button type="submit" class="btn-primary">Save Settings</button>
+                        </form>
+                    </div>
+                    <div class="admin-section">
+                        <h3>View Settings (Local)</h3>
+                        <div class="form-group">
+                            <label>Default Month:</label>
+                            <select id="defaultMonth">
+                                <option value="">Current</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>CY/FY Toggle:</label>
+                            <select id="defaultPeriod">
+                                <option value="CY">Calendar Year</option>
+                                <option value="FY">Fiscal Year</option>
+                            </select>
+                        </div>
+                        <button type="button" class="btn-secondary" onclick="saveViewSettings()">Save View Settings</button>
+                    </div>
+                    <div class="admin-section">
+                        <h3>System Actions</h3>
+                        <button type="button" class="btn-refresh" onclick="refreshData()">Instant Refresh (Live Preview)</button>
+                        <p><small>Note: Live preview does not persist to database</small></p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Asset Detail Modal -->
+    <div id="assetModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="assetModalTitle">Asset Details</h2>
+            <div id="assetModalContent"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

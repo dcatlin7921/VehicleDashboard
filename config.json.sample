@@ -1,0 +1,5 @@
+{
+  "API_BASE": "http://localhost:3000",
+  "ENVIRONMENT": "development",
+  "DEBUG": true
+}
