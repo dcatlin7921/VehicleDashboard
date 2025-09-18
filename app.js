@@ -12,6 +12,7 @@ class FleetDashboard {
             status: '',
             search: ''
         };
+        this.pastedMockData = null;
         
         this.init();
     }
@@ -21,8 +22,10 @@ class FleetDashboard {
             await this.loadConfig();
             this.setupEventListeners();
             this.loadViewSettings();
-            await this.loadData();
-            this.renderDashboard();
+            const dataLoaded = await this.loadData();
+            if (dataLoaded) {
+                this.renderDashboard();
+            }
         } catch (error) {
             console.error('Failed to initialize dashboard:', error);
             this.showError('Failed to load dashboard configuration');
@@ -46,7 +49,6 @@ class FleetDashboard {
             }
         }
         this.apiBase = this.config.API_BASE || '';
-        this.mock = !!this.config.MOCK;
     }
 
     setupEventListeners() {
@@ -93,9 +95,32 @@ class FleetDashboard {
                 modal.style.display = 'none';
             }
         });
+
+        // Mock data buttons
+        document.getElementById('generateSchemaBtn').addEventListener('click', () => this.generateMockSchema());
+        document.getElementById('loadMockDataBtn').addEventListener('click', () => this.loadPastedMockData());
+
     }
 
     async loadData() {
+        // --- START: New logic for pasted mock data ---
+        if (this.pastedMockData) {
+            console.log("Loading from pasted mock data.");
+            this.data = {
+                info: this.pastedMockData.info || {},
+                kpis: this.pastedMockData.kpis || {},
+                assets: this.pastedMockData.assets || [],
+                maintenance: this.pastedMockData.maintenance || [],
+                faults: this.pastedMockData.faults || [],
+                miles: this.pastedMockData.miles || []
+            };
+            // Do not reset this.pastedMockData here, allow multiple re-renders
+            // from the same pasted data until it's cleared or a full refresh happens.
+            await this.loadAdminConfig(); // Still fetch this live or from fixture
+            return true; // Exit early
+        }
+        // --- END: New logic ---
+
         try {
             const [info, kpis, assets, maintenance, faults, miles] = await Promise.all([
                 this.apiCall('/api/info'),
@@ -116,9 +141,11 @@ class FleetDashboard {
             };
 
             await this.loadAdminConfig();
+            return true;
         } catch (error) {
             console.error('Failed to load data:', error);
             this.showError('Failed to load fleet data');
+            return false;
         }
     }
 
@@ -134,33 +161,12 @@ class FleetDashboard {
     }
 
     async apiCall(endpoint) {
-        if (this.mock) return this.fetchFixture(endpoint);
         const url = this.apiBase + endpoint;
         const r = await fetch(url);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
     }
 
-    async fetchFixture(endpoint) {
-        const map = {
-            '/api/info': 'info.json',
-            '/api/kpis': 'kpis.json',
-            '/api/assets': 'assets.json',
-            '/api/maintenance/due': 'maintenance_due.json',
-            '/api/faults/activeSummary': 'faults_activeSummary.json',
-            '/api/miles/monthly': 'miles_monthly.json',
-            '/api/admin/config': 'admin_config.json',
-            '/api/refresh-now': 'info.json',
-            '/api/miles/asset/': 'miles_asset.json',
-            '/api/faults/history/': 'faults_history.json',
-            '/api/maintenance/asset/': 'maintenance_asset.json'
-        };
-        const key = Object.keys(map).find(k => endpoint.startsWith(k));
-        const file = map[key];
-        const r = await fetch(`/fixtures/${file}`);
-        if (!r.ok) throw new Error(`Fixture ${file} missing`);
-        return r.json();
-    }
 
     renderDashboard() {
         this.updateKPIs();
@@ -652,6 +658,38 @@ class FleetDashboard {
         }, 100);
     }
 
+    generateMockSchema() {
+        const schema = {
+            info: { last_snapshot_utc: new Date().toISOString(), fleet_size: 0 },
+            kpis: { mtd_miles: 0, ytd_miles: 0, fytd_miles: 0, active_assets_7d: 0, utilization_pct_7d: 0, avg_mi_asset_day_7d: 0, faults_active_vehicle: 0, faults_active_telematics: 0, maint_overdue: 0, maint_due_soon: 0 },
+            assets: [{ device_id: 'b1', device_name: 'Vehicle-01', vin: 'VIN01', latest_odo_miles: 10000, miles_7d: 150, faults_active: 0, maint_status: 'OK' }],
+            maintenance: [{ device_id: 'b1', service_type: 'Oil Change', last_service_date: '2025-01-01', last_service_odo: 5000, miles_to_due: 4850, days_to_due: 165, status: 'OK' }],
+            faults: [{ device_id: 'b2', device_name: 'Vehicle-02', code: 'P0300', description: 'Random Misfire', severity: 'Medium', last_seen_utc: new Date().toISOString(), is_active: true }],
+            miles: [{ device_id: 'b1', device_name: 'Vehicle-01', month: '2025-08', start_miles: 9000, end_miles: 9500, miles_driven: 500, dq_flag: 'OK' }]
+        };
+        const schemaString = JSON.stringify(schema, null, 2);
+        document.getElementById('mockDataInput').value = schemaString;
+        alert('Blank schema generated in the text box.');
+    }
+
+    loadPastedMockData() {
+        const jsonText = document.getElementById('mockDataInput').value;
+        if (!jsonText) {
+            alert('Mock data text box is empty.');
+            return;
+        }
+        try {
+            this.pastedMockData = JSON.parse(jsonText);
+            // We must reload and re-render everything
+            this.loadData().then(() => this.renderDashboard());
+            alert('Pasted mock data loaded successfully!');
+        } catch (error) {
+            console.error('Invalid JSON pasted:', error);
+            alert(`Failed to parse mock data. Please check if it's valid JSON. Error: ${error.message}` );
+            this.pastedMockData = null; // Clear invalid data
+        }
+    }
+
     renderAdmin() {
         // Admin form is populated in loadAdminConfig
     }
@@ -713,7 +751,7 @@ class FleetDashboard {
     saveViewSettings() {
         const settings = {
             currentTab: this.currentTab,
-            filters: this.filters
+            filters: this.filters,
         };
         localStorage.setItem('fleetDashboard_viewSettings', JSON.stringify(settings));
     }

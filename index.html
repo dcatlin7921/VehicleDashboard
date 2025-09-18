@@ -313,6 +313,25 @@
                         <button type="button" class="btn-secondary" onclick="saveViewSettings()">Save View Settings</button>
                     </div>
                     <div class="admin-section">
+                        <h3>Mock Data Testing</h3>
+                        <p><small>To test the dashboard with mock data, follow these steps:
+                            <ol style="margin: 10px 20px;">
+                                <li>Click "Generate Blank Schema" to get a template JSON object.</li>
+                                <li>Paste the schema into the text area below and fill it with your desired test data. The entire pasted text must be a single, valid JSON object.</li>
+                                <li>Click "Load Pasted Data". The dashboard will immediately reload using your provided data.</li>
+                            </ol>
+                            Note: This is a temporary override for your current session. Refreshing the page will clear the mock data and revert to live API calls.
+                        </small></p>
+                        <div class="form-group">
+                            <label for="mockDataInput">Mock JSON Payload:</label>
+                            <textarea id="mockDataInput" rows="10" placeholder="Paste mock JSON here..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn-secondary" id="generateSchemaBtn">Generate Blank Schema</button>
+                            <button type="button" class="btn-primary" id="loadMockDataBtn">Load Pasted Data</button>
+                        </div>
+                    </div>
+                    <div class="admin-section">
                         <h3>System Actions</h3>
                         <button type="button" class="btn-refresh" onclick="refreshData()">Instant Refresh (Live Preview)</button>
                         <p><small>Note: Live preview does not persist to database</small></p>

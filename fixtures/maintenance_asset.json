@@ -1,4 +1,0 @@
-[
-    { "service_type": "Oil Change", "miles_to_due": 500, "days_to_due": 15 },
-    { "service_type": "Tire Rotation", "miles_to_due": 2500, "days_to_due": 45 }
-]
