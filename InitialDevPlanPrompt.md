@@ -1,3 +1,5 @@
+version 0.6 beta
+
 # Fleet Snapshot Dashboard — Portable Dev Plan (Small‑Fleet)
 
 *Scope: ≤50 assets (≈25 typical). No trips/locations. Built from ****nightly SQL snapshots****; optional ****live preview**** (non‑persisted).*

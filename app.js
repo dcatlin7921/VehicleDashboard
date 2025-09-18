@@ -6,18 +6,17 @@ class FleetDashboard {
         this.data = {};
         this.charts = {};
         this.currentTab = 'overview';
-        this.filters = {
-            agency: '',
-            class: '',
-            status: '',
-            search: ''
-        };
-        this.pastedMockData = null;
+        // Strict mock mode (session-only). Defaults OFF on refresh.
+        this.mockMode = false;
+        this.mockData = null;
+        this.connectionStatus = 'connecting'; // connecting, online, offline, mock
+        this._bannerTimeoutId = null; // timer for auto-hiding status banner
         
         this.init();
     }
 
     async init() {
+        this.updateConnectionStatus('connecting');
         try {
             await this.loadConfig();
             this.setupEventListeners();
@@ -25,10 +24,14 @@ class FleetDashboard {
             const dataLoaded = await this.loadData();
             if (dataLoaded) {
                 this.renderDashboard();
+            } else {
+                // Data load failed, dashboard will not render, status is already 'offline'
+                console.warn('Dashboard initialization skipped due to data load failure.');
             }
         } catch (error) {
             console.error('Failed to initialize dashboard:', error);
             this.showError('Failed to load dashboard configuration');
+            this.updateConnectionStatus('offline');
         }
     }
 
@@ -57,26 +60,12 @@ class FleetDashboard {
             btn.addEventListener('click', (e) => this.switchTab(e.target.dataset.tab));
         });
 
-        // Filters
-        document.getElementById('filterAgency').addEventListener('change', (e) => {
-            this.filters.agency = e.target.value;
-            this.applyFilters();
-        });
-        document.getElementById('filterClass').addEventListener('change', (e) => {
-            this.filters.class = e.target.value;
-            this.applyFilters();
-        });
-        document.getElementById('filterStatus').addEventListener('change', (e) => {
-            this.filters.status = e.target.value;
-            this.applyFilters();
-        });
-        document.getElementById('filterSearch').addEventListener('input', (e) => {
-            this.filters.search = e.target.value.toLowerCase();
-            this.applyFilters();
-        });
 
-        // Refresh button
-        document.getElementById('refreshBtn').addEventListener('click', () => this.refreshData());
+        // Header refresh button removed. Guard in case element exists in future.
+        const headerRefreshBtn = document.getElementById('refreshBtn');
+        if (headerRefreshBtn) {
+            headerRefreshBtn.addEventListener('click', () => this.refreshData());
+        }
 
         // Admin form
         document.getElementById('adminForm').addEventListener('submit', (e) => {
@@ -96,32 +85,100 @@ class FleetDashboard {
             }
         });
 
-        // Mock data buttons
-        document.getElementById('generateSchemaBtn').addEventListener('click', () => this.generateMockSchema());
-        document.getElementById('loadMockDataBtn').addEventListener('click', () => this.loadPastedMockData());
+        // Mock mode controls (Admin pane)
+        const mockToggle = document.getElementById('mockModeToggle');
+        const mockFile = document.getElementById('mockFileInput');
+        const copySchemaBtn = document.getElementById('copyMockSchemaBtn');
+        if (mockToggle) {
+            mockToggle.addEventListener('change', async (e) => {
+                const on = e.target.checked;
+                if (on) {
+                    if (!this.mockData) {
+                        this.notify('warn', 'Please upload a mock data JSON file to enable Mock Mode.');
+                        e.target.checked = false;
+                        this.mockMode = false;
+                        return;
+                    }
+                    this.mockMode = true;
+                    await this.loadData();
+                    this.renderDashboard();
+                } else {
+                    this.mockMode = false;
+                    this.mockData = null; // clear session mock data when turning OFF
+                    await this.loadData();
+                    this.renderDashboard();
+                }
+            });
+        }
+        if (mockFile) {
+            mockFile.addEventListener('change', async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    const json = JSON.parse(text);
+                    const { valid, errors } = this.validateMockData(json);
+                    if (!valid) {
+                        console.error('Mock data validation failed:', errors);
+                        this.notify('error', 'Mock data invalid. Fix the JSON to match production schema.\n' + errors.join('\n'));
+                        this.mockData = null;
+                        if (mockToggle) mockToggle.checked = false;
+                        this.mockMode = false;
+                        return;
+                    }
+                    this.mockData = json;
+                    if (mockToggle) mockToggle.checked = true;
+                    this.mockMode = true;
+                    await this.loadData();
+                    this.renderDashboard();
+                    this.notify('success', 'Mock data loaded. Mock Mode is ON for this session.');
+                } catch (err) {
+                    console.error('Failed to parse uploaded mock JSON:', err);
+                    this.notify('error', 'Failed to parse uploaded JSON: ' + err.message);
+                    this.mockData = null;
+                    if (mockToggle) mockToggle.checked = false;
+                    this.mockMode = false;
+                }
+            });
+        }
+
+        if (copySchemaBtn) {
+            copySchemaBtn.addEventListener('click', async () => {
+                try {
+                    const sample = this.buildSampleMockSchema();
+                    const text = JSON.stringify(sample, null, 2);
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                    } else {
+                        // Fallback for environments without Clipboard API
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }
+                    this.notify('success', 'Sample mock schema copied to clipboard.');
+                } catch (err) {
+                    console.error('Failed to copy sample schema:', err);
+                    this.notify('error', 'Failed to copy to clipboard: ' + err.message);
+                }
+            });
+        }
 
     }
 
     async loadData() {
-        // --- START: New logic for pasted mock data ---
-        if (this.pastedMockData) {
-            console.log("Loading from pasted mock data.");
-            this.data = {
-                info: this.pastedMockData.info || {},
-                kpis: this.pastedMockData.kpis || {},
-                assets: this.pastedMockData.assets || [],
-                maintenance: this.pastedMockData.maintenance || [],
-                faults: this.pastedMockData.faults || [],
-                miles: this.pastedMockData.miles || []
-            };
-            // Do not reset this.pastedMockData here, allow multiple re-renders
-            // from the same pasted data until it's cleared or a full refresh happens.
-            await this.loadAdminConfig(); // Still fetch this live or from fixture
-            return true; // Exit early
+        // Strict mock mode: use uploaded JSON only when toggle is ON
+        if (this.mockMode && this.mockData) {
+            this.updateConnectionStatus('mock');
+            this.data = this.mockData;
+            await this.loadAdminConfig();
+            return true;
         }
-        // --- END: New logic ---
 
         try {
+            this.updateConnectionStatus('connecting');
             const [info, kpis, assets, maintenance, faults, miles] = await Promise.all([
                 this.apiCall('/api/info'),
                 this.apiCall('/api/kpis'),
@@ -141,15 +198,24 @@ class FleetDashboard {
             };
 
             await this.loadAdminConfig();
+            this.updateConnectionStatus('online');
             return true;
         } catch (error) {
             console.error('Failed to load data:', error);
             this.showError('Failed to load fleet data');
+            this.updateConnectionStatus('offline');
             return false;
         }
     }
 
     async loadAdminConfig() {
+        // In mock mode, avoid calling live API. Use admin from mock JSON if provided; otherwise leave current form values.
+        if (this.connectionStatus === 'mock') {
+            const mockAdmin = (this.mockData && this.mockData.admin) ? this.mockData.admin : null;
+            if (mockAdmin) this.populateAdminForm(mockAdmin);
+            return;
+        }
+
         try {
             const config = await this.apiCall('/api/admin/config');
             if (config) {
@@ -160,9 +226,9 @@ class FleetDashboard {
         }
     }
 
-    async apiCall(endpoint) {
+    async apiCall(endpoint, options = {}) {
         const url = this.apiBase + endpoint;
-        const r = await fetch(url);
+        const r = await fetch(url, options);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
     }
@@ -172,6 +238,15 @@ class FleetDashboard {
         this.updateKPIs();
         this.updateFreshness();
         this.renderCurrentTab();
+    }
+
+    updateConnectionStatus(status) {
+        this.connectionStatus = status;
+        const statusIndicator = document.getElementById('connectionStatus');
+        if (statusIndicator) {
+            statusIndicator.className = 'status-indicator ' + status;
+            statusIndicator.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        }
     }
 
     updateKPIs() {
@@ -201,11 +276,12 @@ class FleetDashboard {
 
     updateFreshness() {
         const lastUpdate = document.getElementById('lastUpdate');
-        if (this.data.info.last_snapshot_utc) {
+        if (!lastUpdate) return;
+        if (this.connectionStatus === 'online' && this.data.info && this.data.info.last_snapshot_utc) {
             const date = new Date(this.data.info.last_snapshot_utc);
-            lastUpdate.textContent = `Last updated: ${date.toLocaleString()} UTC`;
+            lastUpdate.textContent = `Last datapull: ${date.toLocaleString()} UTC`;
         } else {
-            lastUpdate.textContent = 'No data available';
+            lastUpdate.textContent = '';
         }
     }
 
@@ -258,7 +334,7 @@ class FleetDashboard {
         const ctx = document.getElementById('dailyMilesChart');
         if (!ctx) return;
 
-        const dailyMiles = this.data.kpis.daily_miles_60d || [];
+        const dailyMiles = this.data.kpis?.daily_miles_60d || [];
         const labels = dailyMiles.map(d => new Date(d.date).toLocaleDateString());
         const data = dailyMiles.map(d => d.miles);
 
@@ -301,7 +377,7 @@ class FleetDashboard {
         const container = document.getElementById('topMoversList');
         if (!container) return;
 
-        const movers = this.data.kpis.top_movers_mtd || [];
+        const movers = this.data.kpis?.top_movers_mtd || [];
 
         if (movers.length === 0) {
             container.innerHTML = '<p>No mileage data for the current period.</p>';
@@ -320,10 +396,11 @@ class FleetDashboard {
         const container = document.getElementById('complianceItems');
         if (!container) return;
 
-        const compliance = this.data.kpis.compliance || {};
+        const compliance = this.data.kpis?.compliance || {};
+        const kpis = this.data.kpis || {};
 
         const items = [
-            { label: 'Overdue maintenance', value: this.data.kpis.maint_overdue || 0, status: (this.data.kpis.maint_overdue > 0) ? 'overdue' : 'ok' },
+            { label: 'Overdue maintenance', value: kpis.maint_overdue || 0, status: (kpis.maint_overdue > 0) ? 'overdue' : 'ok' },
             { label: 'Missing start/end snapshots', value: compliance.missing_snapshots || 0, status: (compliance.missing_snapshots > 0) ? 'warning' : 'ok' },
             { label: 'Device swaps since FY start', value: compliance.device_swaps_fy || 0, status: (compliance.device_swaps_fy > 5) ? 'warning' : 'ok' }
         ];
@@ -346,7 +423,7 @@ class FleetDashboard {
         const ctx = document.getElementById('monthlyMilesChart');
         if (!ctx) return;
 
-        const monthlyMiles = this.data.miles.filter(m => m.month === '2024-07'); // Example month, will be dynamic
+        const monthlyMiles = this.data.miles?.filter(m => m.month === '2024-07') || []; // Example month, will be dynamic
         const labels = monthlyMiles.map(m => m.asset_name);
         const data = monthlyMiles.map(m => m.miles);
 
@@ -380,7 +457,7 @@ class FleetDashboard {
         const ctx = document.getElementById('fleetMilesTrendChart');
         if (!ctx) return;
 
-        const trend = this.data.kpis.monthly_fleet_miles_12m || [];
+        const trend = this.data.kpis?.monthly_fleet_miles_12m || [];
         const labels = trend.map(m => m.month);
         const data = trend.map(m => m.miles);
 
@@ -442,9 +519,10 @@ class FleetDashboard {
     }
 
     updateMaintenanceKPIs() {
-        const overdue = this.data.maintenance.filter(m => m.status === 'OVERDUE').length;
-        const dueSoon = this.data.maintenance.filter(m => m.status === 'DUE_SOON').length;
-        const upcoming = this.data.maintenance.filter(m => m.status === 'UPCOMING').length;
+        const maintenanceData = this.data.maintenance || [];
+        const overdue = maintenanceData.filter(m => m.status === 'OVERDUE').length;
+        const dueSoon = maintenanceData.filter(m => m.status === 'DUE_SOON').length;
+        const upcoming = maintenanceData.filter(m => m.status === 'UPCOMING').length;
 
         document.getElementById('maintOverdueTile').textContent = overdue;
         document.getElementById('maintDueSoonTile').textContent = dueSoon;
@@ -512,7 +590,8 @@ class FleetDashboard {
         const ctx = document.getElementById('faultsSeverityChart');
         if (!ctx) return;
 
-        const summary = this.data.faults.reduce((acc, fault) => {
+        const faultsData = this.data.faults || [];
+        const summary = faultsData.reduce((acc, fault) => {
             acc[fault.severity] = (acc[fault.severity] || 0) + 1;
             return acc;
         }, {});
@@ -549,7 +628,7 @@ class FleetDashboard {
         const ctx = document.getElementById('topFaultsChart');
         if (!ctx) return;
 
-        const topFaults = this.data.kpis.top_recurring_faults || [];
+        const topFaults = this.data.kpis?.top_recurring_faults || [];
         const labels = topFaults.map(f => f.code);
         const data = topFaults.map(f => f.count);
 
@@ -616,12 +695,21 @@ class FleetDashboard {
         content.innerHTML = `Loading details...`;
         modal.style.display = 'block';
 
-        // In a real app, you'd fetch this data. We'll simulate it for now.
-        const [miles, faults, services] = await Promise.all([
-            this.apiCall(`/api/miles/asset/${assetId}?months=12`),
-            this.apiCall(`/api/faults/history/${assetId}`),
-            this.apiCall(`/api/maintenance/asset/${assetId}`)
-        ]);
+        let miles, faults, services;
+        if (this.connectionStatus === 'mock') {
+            // Use only provided mock dataset; no synthetic data
+            const assetName = asset.name;
+            miles = (this.data.miles || []).filter(m => m.asset_name === assetName);
+            faults = (this.data.faults || []).filter(f => f.asset_name === assetName);
+            services = (this.data.maintenance || []).filter(m => m.asset_name === assetName);
+        } else {
+            // Live mode: fetch from API
+            [miles, faults, services] = await Promise.all([
+                this.apiCall(`/api/miles/asset/${assetId}?months=12`),
+                this.apiCall(`/api/faults/history/${assetId}`),
+                this.apiCall(`/api/maintenance/asset/${assetId}`)
+            ]);
+        }
 
         content.innerHTML = `
             <h3>12-Month Miles Chart</h3>
@@ -658,37 +746,7 @@ class FleetDashboard {
         }, 100);
     }
 
-    generateMockSchema() {
-        const schema = {
-            info: { last_snapshot_utc: new Date().toISOString(), fleet_size: 0 },
-            kpis: { mtd_miles: 0, ytd_miles: 0, fytd_miles: 0, active_assets_7d: 0, utilization_pct_7d: 0, avg_mi_asset_day_7d: 0, faults_active_vehicle: 0, faults_active_telematics: 0, maint_overdue: 0, maint_due_soon: 0 },
-            assets: [{ device_id: 'b1', device_name: 'Vehicle-01', vin: 'VIN01', latest_odo_miles: 10000, miles_7d: 150, faults_active: 0, maint_status: 'OK' }],
-            maintenance: [{ device_id: 'b1', service_type: 'Oil Change', last_service_date: '2025-01-01', last_service_odo: 5000, miles_to_due: 4850, days_to_due: 165, status: 'OK' }],
-            faults: [{ device_id: 'b2', device_name: 'Vehicle-02', code: 'P0300', description: 'Random Misfire', severity: 'Medium', last_seen_utc: new Date().toISOString(), is_active: true }],
-            miles: [{ device_id: 'b1', device_name: 'Vehicle-01', month: '2025-08', start_miles: 9000, end_miles: 9500, miles_driven: 500, dq_flag: 'OK' }]
-        };
-        const schemaString = JSON.stringify(schema, null, 2);
-        document.getElementById('mockDataInput').value = schemaString;
-        alert('Blank schema generated in the text box.');
-    }
-
-    loadPastedMockData() {
-        const jsonText = document.getElementById('mockDataInput').value;
-        if (!jsonText) {
-            alert('Mock data text box is empty.');
-            return;
-        }
-        try {
-            this.pastedMockData = JSON.parse(jsonText);
-            // We must reload and re-render everything
-            this.loadData().then(() => this.renderDashboard());
-            alert('Pasted mock data loaded successfully!');
-        } catch (error) {
-            console.error('Invalid JSON pasted:', error);
-            alert(`Failed to parse mock data. Please check if it's valid JSON. Error: ${error.message}` );
-            this.pastedMockData = null; // Clear invalid data
-        }
-    }
+    // Removed generateMockSchema and pasted mock data loader (strict file-based mock mode only)
 
     renderAdmin() {
         // Admin form is populated in loadAdminConfig
@@ -741,10 +799,10 @@ class FleetDashboard {
                 },
                 body: JSON.stringify(settings)
             });
-            alert('Settings saved successfully');
+            this.notify('success', 'Settings saved successfully');
         } catch (error) {
             console.error('Failed to save settings:', error);
-            alert('Failed to save settings');
+            this.notify('error', 'Failed to save settings');
         }
     }
 
@@ -763,42 +821,104 @@ class FleetDashboard {
             if (settings.currentTab) {
                 this.switchTab(settings.currentTab);
             }
-            if (settings.filters) {
-                this.filters = settings.filters;
-                this.applyFilterValues();
-            }
         }
     }
 
-    applyFilterValues() {
-        document.getElementById('filterAgency').value = this.filters.agency;
-        document.getElementById('filterClass').value = this.filters.class;
-        document.getElementById('filterStatus').value = this.filters.status;
-        document.getElementById('filterSearch').value = this.filters.search;
-    }
-
-    applyFilters() {
-        this.renderCurrentTab();
-        this.saveViewSettings();
-    }
 
     async refreshData() {
-        const btn = document.getElementById('refreshBtn');
-        btn.disabled = true;
-        btn.textContent = '🔄 Refreshing...';
-
         try {
-            await this.apiCall('/api/refresh-now', { method: 'POST' });
+            if (this.connectionStatus !== 'mock') {
+                await this.apiCall('/api/refresh-now', { method: 'POST' });
+            }
             await this.loadData();
             this.renderDashboard();
         } catch (error) {
             console.error('Failed to refresh data:', error);
             this.showError('Failed to refresh data');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = '🔄 Refresh';
         }
     }
+
+    // Strict validator for uploaded mock JSON to match production fields used by UI
+    validateMockData(payload) {
+        const errors = [];
+        const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
+        const isArray = Array.isArray;
+
+        if (!isObject(payload)) {
+            return { valid: false, errors: ['Root must be an object'] };
+        }
+
+        // info
+        if (!isObject(payload.info)) errors.push('Missing object: info');
+        // kpis
+        if (!isObject(payload.kpis)) errors.push('Missing object: kpis');
+
+        // assets
+        if (!isArray(payload.assets)) errors.push('Missing array: assets');
+        else {
+            payload.assets.forEach((a, i) => {
+                const req = ['id','name','vin','last_known_odo','miles_7d','active_faults','maint_status'];
+                req.forEach(k => { if (a[k] === undefined) errors.push(`assets[${i}].${k} is required`); });
+            });
+        }
+
+        // maintenance
+        if (!isArray(payload.maintenance)) errors.push('Missing array: maintenance');
+        // faults
+        if (!isArray(payload.faults)) errors.push('Missing array: faults');
+        // miles
+        if (!isArray(payload.miles)) errors.push('Missing array: miles');
+
+        return { valid: errors.length === 0, errors };
+    }
+
+    // Build a sample mock schema object matching production fields used by the UI
+    buildSampleMockSchema() {
+        const nowIso = new Date().toISOString();
+        return {
+            info: { last_snapshot_utc: nowIso },
+            kpis: {
+                fleet_size: 2,
+                mtd_miles: 1200,
+                ytd_miles: 15400,
+                fytd_miles: 9000,
+                active_assets_7d: 2,
+                utilization_pct_7d: 65.2,
+                avg_mi_asset_day_7d: 14.3,
+                faults_active_vehicle: 1,
+                faults_active_telematics: 0,
+                maint_overdue: 0,
+                maint_due_soon: 1,
+                daily_miles_60d: [],
+                monthly_fleet_miles_12m: [],
+                top_recurring_faults: [],
+                compliance: { missing_snapshots: 0, device_swaps_fy: 0 }
+            },
+            assets: [
+                { id: 'a1', name: 'Vehicle-01', vin: 'VIN01', last_known_odo: 15000, miles_7d: 320, active_faults: 1, maint_status: 'OK' },
+                { id: 'a2', name: 'Vehicle-02', vin: 'VIN02', last_known_odo: 7400, miles_7d: 120, active_faults: 0, maint_status: 'DUE_SOON' }
+            ],
+            maintenance: [
+                { asset_name: 'Vehicle-02', service_type: 'Oil Change', last_service_date: '2025-08-01', last_service_odo: 5000, miles_to_due: 200, days_to_due: 10, status: 'DUE_SOON' }
+            ],
+            faults: [
+                { asset_name: 'Vehicle-01', code: 'P0300', description: 'Random Misfire Detected', severity: 'High', last_seen_utc: nowIso, is_active: true }
+            ],
+            miles: [
+                { asset_name: 'Vehicle-01', month: '2025-08', start_odo: 14000, end_odo: 15000, miles: 1000, quality: 'OK' },
+                { asset_name: 'Vehicle-02', month: '2025-08', start_odo: 7000, end_odo: 7400, miles: 400, quality: 'OK' }
+            ],
+            admin: {
+                fy_start_month: 7,
+                due_soon_miles: 500,
+                due_soon_days: 15,
+                utilization_threshold: 1,
+                odometer_precedence: 'Engine,Transmission,ABS'
+            }
+        };
+    }
+
+    // Removed built-in default mock dataset
 
     formatNumber(num, decimals = 0) {
         if (num === null || num === undefined) {
@@ -815,8 +935,34 @@ class FleetDashboard {
     }
 
     showError(message) {
-        // Simple error display - could be enhanced with a toast/notification system
-        alert(message);
+        // Route errors through non-blocking banner
+        this.notify('error', message);
+    }
+
+    // Non-blocking status banner
+    notify(type, message, opts = {}) {
+        const { autoHide = true, duration = 4000 } = opts;
+        const banner = document.getElementById('statusBanner');
+        if (!banner) {
+            console.warn('Status banner element not found');
+            return;
+        }
+        const valid = new Set(['info', 'success', 'warn', 'error']);
+        const variant = valid.has(type) ? type : 'info';
+        banner.className = `status-banner status-${variant}`;
+        banner.textContent = message;
+        banner.style.display = 'block';
+
+        if (this._bannerTimeoutId) {
+            clearTimeout(this._bannerTimeoutId);
+            this._bannerTimeoutId = null;
+        }
+        if (autoHide) {
+            this._bannerTimeoutId = setTimeout(() => {
+                banner.style.display = 'none';
+                this._bannerTimeoutId = null;
+            }, Math.max(1500, duration));
+        }
     }
 }
 

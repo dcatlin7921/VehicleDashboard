@@ -1,6 +1,0 @@
-{
-  "API_BASE": "",
-  "ENVIRONMENT": "development",
-  "DEBUG": true,
-  "MOCK": true
-}

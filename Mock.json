@@ -1,0 +1,161 @@
+{
+  "info": {
+    "last_snapshot_utc": "2025-09-18T13:14:24.287Z"
+  },
+  "kpis": {
+    "fleet_size": 3,
+    "mtd_miles": 1850,
+    "ytd_miles": 26900,
+    "fytd_miles": 10900,
+    "active_assets_7d": 2,
+    "utilization_pct_7d": 66.7,
+    "avg_mi_asset_day_7d": 52.4,
+    "faults_active_vehicle": 2,
+    "faults_active_telematics": 0,
+    "maint_overdue": 1,
+    "maint_due_soon": 1,
+    "daily_miles_60d": [
+        {"date": "2025-07-21", "miles": 145}, {"date": "2025-07-22", "miles": 160},
+        {"date": "2025-07-23", "miles": 155}, {"date": "2025-07-24", "miles": 148},
+        {"date": "2025-07-25", "miles": 170}, {"date": "2025-07-26", "miles": 180},
+        {"date": "2025-07-27", "miles": 130}, {"date": "2025-07-28", "miles": 151},
+        {"date": "2025-07-29", "miles": 158}, {"date": "2025-07-30", "miles": 162},
+        {"date": "2025-07-31", "miles": 149}, {"date": "2025-08-01", "miles": 150},
+        {"date": "2025-08-02", "miles": 145}, {"date": "2025-08-03", "miles": 155},
+        {"date": "2025-08-04", "miles": 160}, {"date": "2025-08-05", "miles": 140},
+        {"date": "2025-08-06", "miles": 135}, {"date": "2025-08-07", "miles": 148},
+        {"date": "2025-08-08", "miles": 152}, {"date": "2025-08-09", "miles": 170},
+        {"date": "2025-08-10", "miles": 165}, {"date": "2025-08-11", "miles": 158},
+        {"date": "2025-08-12", "miles": 149}, {"date": "2025-08-13", "miles": 153},
+        {"date": "2025-08-14", "miles": 147}, {"date": "2025-08-15", "miles": 163},
+        {"date": "2025-08-16", "miles": 175}, {"date": "2025-08-17", "miles": 130},
+        {"date": "2025-08-18", "miles": 155}, {"date": "2025-08-19", "miles": 160},
+        {"date": "2025-08-20", "miles": 142}, {"date": "2025-08-21", "miles": 150},
+        {"date": "2025-08-22", "miles": 155}, {"date": "2025-08-23", "miles": 168},
+        {"date": "2025-08-24", "miles": 125}, {"date": "2025-08-25", "miles": 144},
+        {"date": "2025-08-26", "miles": 151}, {"date": "2025-08-27", "miles": 149},
+        {"date": "2025-08-28", "miles": 153}, {"date": "2025-08-29", "miles": 160},
+        {"date": "2025-08-30", "miles": 170}, {"date": "2025-08-31", "miles": 135},
+        {"date": "2025-09-01", "miles": 60}, {"date": "2025-09-02", "miles": 65},
+        {"date": "2025-09-03", "miles": 55}, {"date": "2025-09-04", "miles": 70},
+        {"date": "2025-09-05", "miles": 75}, {"date": "2025-09-06", "miles": 80},
+        {"date": "2025-09-07", "miles": 40}, {"date": "2025-09-08", "miles": 62},
+        {"date": "2025-09-09", "miles": 68}, {"date": "2025-09-10", "miles": 59},
+        {"date": "2025-09-11", "miles": 72}, {"date": "2025-09-12", "miles": 78},
+        {"date": "2025-09-13", "miles": 85}, {"date": "2025-09-14", "miles": 45},
+        {"date": "2025-09-15", "miles": 66}, {"date": "2025-09-16", "miles": 69},
+        {"date": "2025-09-17", "miles": 71}, {"date": "2025-09-18", "miles": 70}
+    ],
+    "monthly_fleet_miles_12m": [
+      {"month": "2024-10", "miles": 4100}, {"month": "2024-11", "miles": 4050},
+      {"month": "2024-12", "miles": 4200}, {"month": "2025-01", "miles": 3900},
+      {"month": "2025-02", "miles": 3600}, {"month": "2025-03", "miles": 4300},
+      {"month": "2025-04", "miles": 4450}, {"month": "2025-05", "miles": 4550},
+      {"month": "2025-06", "miles": 4700}, {"month": "2025-07", "miles": 4600},
+      {"month": "2025-08", "miles": 4450}, {"month": "2025-09", "miles": 1850}
+    ],
+    "top_recurring_faults": [
+      { "code": "P0420", "count": 2 },
+      { "code": "B1476", "count": 1 }
+    ],
+    "compliance": {
+      "missing_snapshots": 0,
+      "device_swaps_fy": 0
+    }
+  },
+  "assets": [
+    {
+      "id": "a10",
+      "name": "Truck-01",
+      "vin": "VINTRUCK01",
+      "last_known_odo": 85200,
+      "miles_7d": 750,
+      "active_faults": 1,
+      "maint_status": "OVERDUE"
+    },
+    {
+      "id": "a11",
+      "name": "Sedan-55",
+      "vin": "VINSEDAN55",
+      "last_known_odo": 42500,
+      "miles_7d": 350,
+      "active_faults": 0,
+      "maint_status": "DUE_SOON"
+    },
+    {
+      "id": "a12",
+      "name": "SUV-23",
+      "vin": "VINSUV23",
+      "last_known_odo": 15100,
+      "miles_7d": 0,
+      "active_faults": 1,
+      "maint_status": "OK"
+    }
+  ],
+  "maintenance": [
+    {
+      "asset_name": "Truck-01",
+      "service_type": "Tire Rotation",
+      "last_service_date": "2025-03-15",
+      "last_service_odo": 75000,
+      "miles_to_due": -200,
+      "days_to_due": -10,
+      "status": "OVERDUE"
+    },
+    {
+      "asset_name": "Sedan-55",
+      "service_type": "Oil Change",
+      "last_service_date": "2025-05-20",
+      "last_service_odo": 37600,
+      "miles_to_due": 100,
+      "days_to_due": 12,
+      "status": "DUE_SOON"
+    }
+  ],
+  "faults": [
+    {
+      "asset_name": "SUV-23",
+      "code": "P0420",
+      "description": "Catalyst System Efficiency Below Threshold",
+      "severity": "Medium",
+      "last_seen_utc": "2025-09-17T10:30:00.000Z",
+      "is_active": true
+    },
+    {
+      "asset_name": "Truck-01",
+      "code": "B1476",
+      "description": "Wiper Washer Fluid Level Low",
+      "severity": "Low",
+      "last_seen_utc": "2025-09-18T08:00:00.000Z",
+      "is_active": true
+    }
+  ],
+  "miles": [
+    { "asset_name": "Truck-01", "month": "2025-09", "start_odo": 84000, "end_odo": 85200, "miles": 1200, "quality": "OK" },
+    { "asset_name": "Truck-01", "month": "2025-08", "start_odo": 81500, "end_odo": 84000, "miles": 2500, "quality": "OK" },
+    { "asset_name": "Truck-01", "month": "2025-07", "start_odo": 79100, "end_odo": 81500, "miles": 2400, "quality": "OK" },
+    { "asset_name": "Truck-01", "month": "2025-06", "start_odo": 76500, "end_odo": 79100, "miles": 2600, "quality": "OK" },
+    { "asset_name": "Truck-01", "month": "2025-05", "start_odo": 74000, "end_odo": 76500, "miles": 2500, "quality": "OK" },
+    { "asset_name": "Truck-01", "month": "2025-04", "start_odo": 71600, "end_odo": 74000, "miles": 2400, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-09", "start_odo": 41850, "end_odo": 42500, "miles": 650, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-08", "start_odo": 40500, "end_odo": 41850, "miles": 1350, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-07", "start_odo": 39000, "end_odo": 40500, "miles": 1500, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-06", "start_odo": 37600, "end_odo": 39000, "miles": 1400, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-05", "start_odo": 36200, "end_odo": 37600, "miles": 1400, "quality": "OK" },
+    { "asset_name": "Sedan-55", "month": "2025-04", "start_odo": 34800, "end_odo": 36200, "miles": 1400, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-09", "start_odo": 15100, "end_odo": 15100, "miles": 0, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-08", "start_odo": 14500, "end_odo": 15100, "miles": 600, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-07", "start_odo": 13800, "end_odo": 14500, "miles": 700, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-06", "start_odo": 13100, "end_odo": 13800, "miles": 700, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-05", "start_odo": 12450, "end_odo": 13100, "miles": 650, "quality": "OK" },
+    { "asset_name": "SUV-23", "month": "2025-04", "start_odo": 11800, "end_odo": 12450, "miles": 650, "quality": "OK" }
+  ],
+  "admin": {
+    "fy_start_month": 7,
+    "due_soon_miles": 500,
+    "due_soon_days": 15,
+    "utilization_threshold": 1,
+    "odometer_precedence": "Engine,Transmission,ABS"
+  }
+}
+
